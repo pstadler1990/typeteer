@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 from typing import Optional
 from pyppeteer.exceptions import ScanWrongTokenException
@@ -41,7 +43,15 @@ class TokenType(enum.Enum):
     AT = 80
     FOR = 81
     AFTER = 82
+    UNIT = 83
+
     EOF = 999
+
+
+class Unit:
+    def __init__(self, quantity: float, unit: str):
+        self.quantity = quantity
+        self.unit = unit
 
 
 class Token(object):
@@ -61,6 +71,7 @@ class Scanner:
     """
     Tokenizer
     """
+
     def __init__(self):
         self._str_stream: str = ''
         self._char_offset: int = 0
@@ -111,7 +122,11 @@ class Scanner:
                 return Token(TokenType.CHAR_COMMA, cn=self._char_offset)
 
             if self._cur_char.isdigit() or self._cur_char == '.':
-                return Token(TokenType.NUMBER, cn=self._char_offset, value=self._scan_number())
+                tmp_value = self._scan_number_or_duration()
+                if type(tmp_value) == float:
+                    return Token(TokenType.NUMBER, cn=self._char_offset, value=tmp_value)
+                else:
+                    return Token(TokenType.UNIT, cn=self._char_offset, value=tmp_value)
 
             if self._cur_char in ['"', '\'']:
                 if self._opening_str:
@@ -145,18 +160,30 @@ class Scanner:
         while self._cur_char is not None and self._cur_char.isspace():
             self._advance()
 
-    def _scan_number(self) -> float:
+    def _scan_number_or_duration(self) -> [float | Unit]:
         tmp_num = ''
         off = 0
         scan_float = False
         scan_hex = False
-        while self._cur_char is not None and (self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char in ['.', 'x']):
+        scan_unit = False
+        unit = ''
+        number: float
+        while self._cur_char is not None and (
+                self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char in ['.', 'x']):
             if off == 0:
                 if self._cur_char == '0' and self._peek(1).lower() == 'x':
                     self._advance()
                     self._advance()
                     scan_hex = True
                     scan_float = False
+
+            if off > 0 and self._cur_char in ['s', 'm']:
+                if scan_unit:
+                    if unit != 'm':
+                        raise ScanWrongTokenException('Invalid token for duration')
+                unit += self._cur_char
+                self._advance()
+                scan_unit = True
 
             if self._cur_char == '.':
                 # Leading dot without digit (.3)
@@ -169,13 +196,19 @@ class Scanner:
 
             if self._cur_char.isdigit() or (scan_hex and self._cur_char.upper() in ['A', 'B', 'C', 'D', 'E', 'F']):
                 tmp_num += self._cur_char
-            else:
-                raise ScanWrongTokenException('Illegal number at {o}'.format(o=self._char_offset))
-            self._advance()
-            off += 1
+            # else:
+            #     raise ScanWrongTokenException('Illegal number at {o}'.format(o=self._char_offset))
+                self._advance()
+                off += 1
+
         if scan_hex:
-            return float(int('0x' + tmp_num, 16))
-        return float(tmp_num)
+            number = float(int('0x' + tmp_num, 16))
+        else:
+            number = float(tmp_num)
+
+        if scan_unit:
+            return Unit(quantity=number, unit=unit)
+        return number
 
     def _scan_string(self) -> str:
         self._opening_str = True
@@ -194,7 +227,8 @@ class Scanner:
 
     def _scan_identifier(self) -> Token:
         tmp_str = ''
-        while self._cur_char is not None and (self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char == '_'):
+        while self._cur_char is not None and (
+                self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char == '_'):
             tmp_str += self._cur_char
             self._advance()
         return Token(TokenType.REFERENCE, cn=self._char_offset)
@@ -216,6 +250,9 @@ class Scanner:
                 return Token(TokenType.AT, cn=self._char_offset)
             elif tmp_str == 'as':
                 return Token(TokenType.REFERENCE_AS, cn=self._char_offset)
+        elif slen == 3:
+            if tmp_str == 'for':
+                return Token(TokenType.FOR, cn=self._char_offset)
         elif slen == 4:
             if tmp_str == 'show':
                 return Token(TokenType.SHOW, cn=self._char_offset)
@@ -251,7 +288,7 @@ class Scanner:
             if tmp_str == 'transition':
                 return Token(TokenType.TRANSITION_DEFINE, cn=self._char_offset)
 
-        raise ScanWrongTokenException('Unknown token' + tmp_str)
+        raise ScanWrongTokenException('Unknown token ' + tmp_str)
 
     @property
     def char_offset(self):

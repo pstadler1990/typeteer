@@ -116,10 +116,8 @@ class Parser:
         node.time_mark = self._cur_token.value
         self._accept(TokenType.NUMBER)
         self._accept(TokenType.CHAR_COLON)
-        # node.left = self._cur_token
 
         if self._cur_token.ttype == TokenType.SHOW:
-            # node.right =
             node.node = self._parse_show()
         else:
             pass
@@ -141,6 +139,11 @@ class Parser:
         node.args['file'] = self._parse_file_desc()
         self._accept(TokenType.STRING)
 
+        # Optional: for number interval (e.g., for 5s)
+        if self._cur_token and self._cur_token.ttype == TokenType.FOR:
+            self._accept(TokenType.FOR)
+            node.args['duration'] = self._parse_duration()
+
         return node
 
     def _parse_file_desc(self) -> str:
@@ -148,3 +151,21 @@ class Parser:
         if os.path.isfile(path_str):
             return path_str
         self._fail('File ' + path_str + ' not found!')
+
+    def _parse_duration(self) -> int:
+        # number (ms|s|m)
+        unit = self._cur_token.value
+        quantity = unit.quantity
+
+        if unit.unit == 's':
+            factor = 1
+        elif unit.unit == 'ms':
+            factor = .001
+        elif unit.unit == 'm':
+            factor = 60
+        else:
+            self._fail('Unknown time unit for duration')
+
+        self._accept(TokenType.UNIT)
+        return quantity * factor
+
