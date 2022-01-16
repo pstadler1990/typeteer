@@ -8,3 +8,7 @@ class ParseSyntaxException(Exception):
 
 class InvalidOrNoInputStream(Exception):
     pass
+
+
+class GenerateInvalidSequence(Exception):
+    pass

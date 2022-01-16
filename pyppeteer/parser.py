@@ -1,5 +1,7 @@
 import os
 import abc
+from typing import Tuple
+
 from pyppeteer.scanner import Scanner, TokenType, Token
 from pyppeteer.exceptions import ParseSyntaxException
 
@@ -144,6 +146,10 @@ class Parser:
             self._accept(TokenType.FOR)
             node.args['duration'] = self._parse_duration()
 
+        if self._cur_token and self._cur_token.ttype == TokenType.AT:
+            self._accept(TokenType.AT)
+            node.args['coordinates'] = self._parse_coordinates()
+
         return node
 
     def _parse_file_desc(self) -> str:
@@ -156,6 +162,7 @@ class Parser:
         # number (ms|s|m)
         unit = self._cur_token.value
         quantity = unit.quantity
+        factor = 1
 
         if unit.unit == 's':
             factor = 1
@@ -169,3 +176,11 @@ class Parser:
         self._accept(TokenType.UNIT)
         return quantity * factor
 
+    def _parse_coordinates(self) -> Tuple[int, int]:
+        # number, number
+        x = self._cur_token.value
+        self._accept(TokenType.NUMBER)
+        self._accept(TokenType.CHAR_COMMA)
+        y = self._cur_token.value
+        self._accept(TokenType.NUMBER)
+        return x, y
