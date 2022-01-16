@@ -1,7 +1,7 @@
 from pyppeteer.parser import Parser, Node, ShowNode, StatementNode
 from pyppeteer.movie import Movie, movie_add_image_clip
-from pyppeteer.exceptions import GenerateInvalidSequence
-from anytree import Node as TreeNode, findall, RenderTree, PreOrderIter
+from pyppeteer.exceptions import GenerateInvalidSequence, GenerateSymbolAlreadyExists, GenerateSymbolNotFound
+from anytree import Node as TreeNode, findall, RenderTree
 
 
 class NodeVisitor:
@@ -16,7 +16,7 @@ class NodeVisitor:
 
 class VideoGenerator(NodeVisitor):
     def __init__(self):
-        self.symbols = {0: []}
+        self.symbols = {}
         self._cur_node_id = 0
         self.tree: TreeNode = TreeNode("Root", start_time=9999, duration=9999)
         self.parser = Parser()
@@ -69,7 +69,25 @@ class VideoGenerator(NodeVisitor):
 
     def visit_ShowNode(self, node: ShowNode, parent: StatementNode = None):
         print('visit show node', node)
-        start_time = parent.time_mark
+
+        node_id = node.args.get('id', None)
+        if node_id:
+            if self.symbols.get(node_id):
+                raise GenerateSymbolAlreadyExists('Symbol ' + node_id + ' already exists!')
+            self.symbols[node_id] = node
+
+        references_id = node.args.get('references', None)
+        if references_id:
+            reference_obj = self.symbols.get(references_id, None)
+            if reference_obj:
+                # Overwrite with reference's start time
+                reference_start_time = reference_obj.args.get('start_time', 0)
+                reference_duration = reference_obj.args.get('duration', 1)
+                node.args['start_time'] = reference_start_time + reference_duration
+            else:
+                raise GenerateSymbolNotFound('Symbol ' + references_id + ' not found!')
+
+        start_time = node.args.get('start_time', parent.time_mark)
         duration = node.args.get('duration', 1)  # 1s is default duration
 
         # Look through root nodes if entry exists, where this nodes start time and duration fits

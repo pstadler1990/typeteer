@@ -114,6 +114,7 @@ class Scanner:
 
             if self._cur_char == '@':
                 # Reference
+                self._advance(peek)
                 return self._scan_identifier()
 
             if self._cur_char == ',':
@@ -231,7 +232,7 @@ class Scanner:
                 self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char == '_'):
             tmp_str += self._cur_char
             self._advance()
-        return Token(TokenType.REFERENCE, cn=self._char_offset)
+        return Token(TokenType.REFERENCE, cn=self._char_offset, value=tmp_str)
 
     def _scan_keyword(self) -> Token:
         off = 0

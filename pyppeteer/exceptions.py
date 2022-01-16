@@ -12,3 +12,11 @@ class InvalidOrNoInputStream(Exception):
 
 class GenerateInvalidSequence(Exception):
     pass
+
+
+class GenerateSymbolAlreadyExists(Exception):
+    pass
+
+
+class GenerateSymbolNotFound(Exception):
+    pass

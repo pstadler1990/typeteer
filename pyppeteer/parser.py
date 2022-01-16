@@ -82,8 +82,8 @@ class Parser:
         statements = []
         t: TokenType = self._cur_token.ttype
 
-        while t in [TokenType.NUMBER]:
-            if t == TokenType.NUMBER:
+        while t in [TokenType.NUMBER, TokenType.SHOW]:
+            if t == TokenType.NUMBER or t == TokenType.SHOW:
                 statements.append(self._parse_statement())
             # elif t == TokenType.BLOCK_IF:
             #     statements.append(self._parse_if())
@@ -115,12 +115,18 @@ class Parser:
 
     def _parse_statement(self) -> StatementNode:
         node = StatementNode()
-        node.time_mark = self._cur_token.value
-        self._accept(TokenType.NUMBER)
-        self._accept(TokenType.CHAR_COLON)
+
+        has_time_mark = None
+        if self._cur_token.ttype == TokenType.NUMBER:
+            # All normal statements need a time marker at the beginning
+            # However, the show statement has one exception when one uses the "after" keyword in the statement
+            node.time_mark = self._cur_token.value
+            self._accept(TokenType.NUMBER)
+            self._accept(TokenType.CHAR_COLON)
+            has_time_mark = node.time_mark
 
         if self._cur_token.ttype == TokenType.SHOW:
-            node.node = self._parse_show()
+            node.node = self._parse_show(has_time_mark)
         else:
             pass
             # let my_var = (3 + 42)
@@ -128,7 +134,7 @@ class Parser:
 
         return node
 
-    def _parse_show(self) -> ShowNode:
+    def _parse_show(self, time_mark) -> ShowNode:
         node = ShowNode()
 
         self._accept(TokenType.SHOW)
@@ -141,14 +147,39 @@ class Parser:
         node.args['file'] = self._parse_file_desc()
         self._accept(TokenType.STRING)
 
+        parsed_reference = False
         # Optional: for number interval (e.g., for 5s)
-        if self._cur_token and self._cur_token.ttype == TokenType.FOR:
-            self._accept(TokenType.FOR)
-            node.args['duration'] = self._parse_duration()
+        while self._cur_token and self._cur_token.ttype \
+                in [TokenType.FOR, TokenType.AT, TokenType.REFERENCE_AS, TokenType.AFTER]:
+            if self._cur_token.ttype == TokenType.FOR:
+                self._accept(TokenType.FOR)
+                node.args['duration'] = self._parse_duration()
+                continue
 
-        if self._cur_token and self._cur_token.ttype == TokenType.AT:
-            self._accept(TokenType.AT)
-            node.args['coordinates'] = self._parse_coordinates()
+            # Optional: at coordinates
+            if self._cur_token.ttype == TokenType.AT:
+                self._accept(TokenType.AT)
+                node.args['coordinates'] = self._parse_coordinates()
+                continue
+
+            # Optional: as @reference
+            if self._cur_token.ttype == TokenType.REFERENCE_AS:
+                self._accept(TokenType.REFERENCE_AS)
+                node.args['id'] = self._parse_reference()
+                continue
+
+            # Mostly optional: after @reference
+            if self._cur_token.ttype == TokenType.AFTER:
+                self._accept(TokenType.AFTER)
+                node.args['references'] = self._parse_reference()
+                parsed_reference = True
+                continue
+
+        if time_mark is None:
+            if not parsed_reference:
+                self._fail('When omitting the time mark, the "after" keyword is required!')
+        else:
+            node.args['start_time'] = time_mark
 
         return node
 
@@ -184,3 +215,9 @@ class Parser:
         y = self._cur_token.value
         self._accept(TokenType.NUMBER)
         return x, y
+
+    def _parse_reference(self) -> str:
+        # @reference
+        reference_id = self._cur_token.value
+        self._accept(TokenType.REFERENCE)
+        return reference_id
