@@ -6,6 +6,11 @@ def movie_add_image_clip(image_file: str, duration: int, start_time: int, clips:
     clips.append(image_clip.set_start(start_time).set_position(position))
 
 
+def movie_add_text_clip(text: str, duration: int, start_time: int, clips: [], dimensions: [tuple[int, int]], position='center'):
+    text_clip = TextClip(text, color='white', size=dimensions, fontsize=30).set_duration(duration).set_position((20, 30))
+    clips.append(text_clip.set_start(start_time))
+
+
 class Movie:
     def __init__(self):
         self.clips = []

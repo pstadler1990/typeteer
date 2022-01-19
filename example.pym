@@ -1,0 +1,4 @@
+0: show image 'background.png' for 5s as @scene1 
+0: show text "Berlin, 01. Juni 2050" for 4s at 20, 100 as @text0
+show image 'background2.png' for 5s as @scene2 after @text0
+6: show text "Neuer Volkspalast, Ratssitzung" for 3s # TODO: 1s after @text0 (add 1s to after)!

@@ -25,6 +25,22 @@ class ShowNode(Node):
         }
 
 
+class ConcreteNode(abc.ABC):
+    pass
+
+
+class ShowImageNode(ConcreteNode):
+    def __init__(self, image: str):
+        super().__init__()
+        self.image = image
+
+
+class ShowTextNode(ConcreteNode):
+    def __init__(self, text: str):
+        super().__init__()
+        self.text = text
+
+
 class Parser:
     def __init__(self):
         self._scanner = Scanner()
@@ -80,6 +96,10 @@ class Parser:
 
     def _parse_statements(self) -> [StatementNode]:
         statements = []
+
+        if not self._cur_token:
+            return None
+
         t: TokenType = self._cur_token.ttype
 
         while t in [TokenType.NUMBER, TokenType.SHOW]:
@@ -138,14 +158,18 @@ class Parser:
         node = ShowNode()
 
         self._accept(TokenType.SHOW)
+        prev_token_type = self._cur_token.ttype
         if self._cur_token.ttype in [TokenType.SHOW_TEXT, TokenType.SHOW_LINE, TokenType.SHOW_RECT,
                                      TokenType.SHOW_IMAGE, TokenType.SHOW_ELLIPSOID, TokenType.SHOW_CIRCLE]:
             self._accept(self._cur_token.ttype)
         else:
             self._fail('Unexpected token ' + self._cur_token)
 
-        node.args['file'] = self._parse_file_desc()
-        self._accept(TokenType.STRING)
+        if prev_token_type == TokenType.SHOW_IMAGE:
+            node.args['type'] = ShowImageNode(image=self._parse_file_desc())
+            self._accept(TokenType.STRING)
+        elif prev_token_type == TokenType.SHOW_TEXT:
+            node.args['type'] = ShowTextNode(text=self._parse_text())
 
         parsed_reference = False
         # Optional: for number interval (e.g., for 5s)
@@ -188,6 +212,11 @@ class Parser:
         if os.path.isfile(path_str):
             return path_str
         self._fail('File ' + path_str + ' not found!')
+
+    def _parse_text(self) -> str:
+        return_str = self._cur_token.value
+        self._accept(TokenType.STRING)
+        return return_str
 
     def _parse_duration(self) -> int:
         # number (ms|s|m)

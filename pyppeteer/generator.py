@@ -1,5 +1,5 @@
-from pyppeteer.parser import Parser, Node, ShowNode, StatementNode
-from pyppeteer.movie import Movie, movie_add_image_clip
+from pyppeteer.parser import Parser, Node, ShowNode, StatementNode, ShowImageNode, ShowTextNode
+from pyppeteer.movie import Movie, movie_add_image_clip, movie_add_text_clip
 from pyppeteer.exceptions import GenerateInvalidSequence, GenerateSymbolAlreadyExists, GenerateSymbolNotFound
 from anytree import Node as TreeNode, findall, RenderTree
 
@@ -22,7 +22,7 @@ class VideoGenerator(NodeVisitor):
         self.parser = Parser()
         self.movie = Movie()
 
-    def render(self):
+    def render(self, dimensions: [tuple[int, int]]):
         """
         For each root_node_n node, create a VideoClip and combine them using concatenate clip
         :return:
@@ -33,11 +33,17 @@ class VideoGenerator(NodeVisitor):
         for root in root_nodes:
             root_clips = []
             for child in root.children:
-                file = child.obj.args['file']
                 duration = child.duration
                 start_time = child.start_time
                 position = child.obj.args.get('coordinates', (0, 0))
-                movie_add_image_clip(file, duration, start_time, root_clips, position)
+
+                if type(child.obj.args['type']) == ShowImageNode:
+                    file = child.obj.args['type'].image
+                    movie_add_image_clip(file, duration, start_time, root_clips, position)
+                elif type(child.obj.args['type']) == ShowTextNode:
+                    text = child.obj.args['type'].text
+                    movie_add_text_clip(text, duration, start_time, root_clips, dimensions, position)
+
             # Finally, create composite video clip from root_clips
             self.movie.movie_create_composite_clip(root_clips)
 
