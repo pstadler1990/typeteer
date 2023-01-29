@@ -1,7 +1,7 @@
-from pyppeteer.parser import Parser, Node, ShowNode, StatementNode, ShowImageNode, ShowTextNode
-from pyppeteer.movie import Movie, movie_add_image_clip, movie_add_text_clip
-from pyppeteer.exceptions import GenerateInvalidSequence, GenerateSymbolAlreadyExists, GenerateSymbolNotFound
-from anytree import Node as TreeNode, findall, RenderTree
+from pyppeteer.parser import Parser, Node, MethodCallNode, StatementNode
+from pyppeteer.exceptions import GenerateInvalidSequence, GenerateSymbolAlreadyExists, GenerateSymbolNotFound, \
+    GenerateSymbolMethodNotFound
+from pyppeteer.symbols import symbols
 
 
 class NodeVisitor:
@@ -14,95 +14,52 @@ class NodeVisitor:
         raise Exception('No visit_{} method'.format(type(node).__name__))
 
 
-class VideoGenerator(NodeVisitor):
+class FilterLayerGenerator(NodeVisitor):
     def __init__(self):
-        self.symbols = {}
+        self.symbols = symbols.SYMBOLS
         self._cur_node_id = 0
-        self.tree: TreeNode = TreeNode("Root", start_time=9999, duration=9999)
+        self._in_stream = ''
         self.parser = Parser()
-        self.movie = Movie()
 
     def render(self, dimensions: [tuple[int, int]]):
         """
         For each root_node_n node, create a VideoClip and combine them using concatenate clip
         :return:
         """
-        print(RenderTree(self.tree))
-        root_nodes = findall(self.tree, filter_=lambda n: not n.is_root and not n.is_leaf)
-
-        for root in root_nodes:
-            root_clips = []
-            for child in root.children:
-                duration = child.duration
-                start_time = child.start_time
-                position = child.obj.args.get('coordinates', (0, 0))
-
-                if type(child.obj.args['type']) == ShowImageNode:
-                    file = child.obj.args['type'].image
-                    movie_add_image_clip(file, duration, start_time, root_clips, position)
-                elif type(child.obj.args['type']) == ShowTextNode:
-                    text = child.obj.args['type'].text
-                    movie_add_text_clip(text, duration, start_time, root_clips, dimensions, position)
-
-            # Finally, create composite video clip from root_clips
-            self.movie.movie_create_composite_clip(root_clips)
-
-        # alle Zeitmarker enthält; am Ende des gesamten VideoGenerators wird dann diese Liste abgearbeitet und daraus
-        # die Clips erstellt (composite or concatenate)
-        # Der Playback-Tree erzeugt einen Baum, bei dem jeder Clip der ein "after" keyword hat, als Child des Parents ist
-        # Für jeden Eintrag kann dann genau der time mark vorberechnet werden
-        # Node('/Root', duration=9999, start_time=9999)
-        # ├── Node('/Root/root_node_0', duration=10.0, start_time=0.0)
-        # │   ├── Node('/Root/root_node_0/show_node_0', duration=10.0, start_time=0.0)
-        # │   ├── Node('/Root/root_node_0/show_node_1', duration=2.0, start_time=0.0)
-        # │   └── Node('/Root/root_node_0/show_node_2', duration=3.0, start_time=1.0)
-        # └── Node('/Root/root_node_3', duration=5.0, start_time=11.0)
-        # └── Node('/Root/root_node_3/show_node_3', duration=5.0, start_time=11.0)
-        self.movie.render_final_clip()
+        pass
 
     def generate(self, root: Node):
         return self.visit(root)
 
     def visit_StatementNode(self, node: StatementNode, parent: Node = None):
         print("visit statement node", node)
-        if type(node.node) == ShowNode:
-            self.visit_ShowNode(node.node, node)
+        if type(node.node) == MethodCallNode:
+            self.visit_MethodCallNode(node.node, node)
         else:
             raise GenerateInvalidSequence('Invalid node ' + node.node)
 
         self._cur_node_id += 1
         return
 
-    def visit_ShowNode(self, node: ShowNode, parent: StatementNode = None):
-        print('visit show node', node)
+    def visit_MethodCallNode(self, node: MethodCallNode, parent: StatementNode = None):
+        print('visit method call node', node)
 
-        node_id = node.args.get('id', None)
-        if node_id:
-            if self.symbols.get(node_id):
-                raise GenerateSymbolAlreadyExists('Symbol ' + node_id + ' already exists!')
-            self.symbols[node_id] = node
+        module_name = node.args.get('module', None)
+        references_id = node.args.get('method', None)
+        args = node.args.get('args', [])
 
-        references_id = node.args.get('references', None)
+        in_stream = self._in_stream
+
         if references_id:
-            reference_obj = self.symbols.get(references_id, None)
-            if reference_obj:
-                # Overwrite with reference's start time
-                reference_start_time = reference_obj.args.get('start_time', 0)
-                reference_duration = reference_obj.args.get('duration', 1)
-                node.args['start_time'] = reference_start_time + reference_duration
+            module_dict = self.symbols.get(module_name, None)
+            if module_dict:
+                try:
+                    reference_obj = next(x for x in module_dict if x[0] == references_id)
+                    # Call method name by reference_id
+                    self._in_stream = reference_obj[1](in_stream, dict(args))
+                except StopIteration:
+                    raise GenerateSymbolMethodNotFound('Module ' + module_name + ' has no method ' + references_id)
             else:
-                raise GenerateSymbolNotFound('Symbol ' + references_id + ' not found!')
+                raise GenerateSymbolNotFound('Module ' + module_name + ' not found!')
 
-        start_time = node.args.get('start_time', parent.time_mark)
-        duration = node.args.get('duration', 1)  # 1s is default duration
-
-        # Look through root nodes if entry exists, where this nodes start time and duration fits
-        nodes = findall(self.tree, filter_=lambda n: start_time < n.start_time + n.duration and not n.is_leaf and not n.is_root)
-        if not len(nodes):
-            # If none, add a new root branch and this add this node as a child
-            this_root_node = TreeNode('root_node_%d' % self._cur_node_id, parent=self.tree, start_time=start_time, duration=duration)
-            TreeNode('show_node_%d' % self._cur_node_id, parent=this_root_node, start_time=start_time, duration=duration, obj=node)
-        else:
-            # If any, append this as a child of this root node
-            TreeNode('show_node_%d' % self._cur_node_id, parent=nodes[0], start_time=start_time, duration=duration, obj=node)
         return

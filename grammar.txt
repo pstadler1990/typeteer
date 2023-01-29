@@ -1,29 +1,21 @@
 statements: statement comment? statements 
 
 statement: 
-	define transition (as ref): (duration interval) (slide|fade)
-	time_marker show show_obj (after ref)?
-	time_marker hide ref
-	time_marker play sound file_desc (for interval)? (as ref)?
-	show show_obj after ref
+	method
 	comment
 	empty_line
 
-slide: slide_left|slide_right|slide_top|slide_bottom
-fade: fade_in|fade_out
-time_marker: number:
-file_desc: file_path
-file_path: ".+"
-show_obj: (image|text|circle|rect|ellipsoid|line) file_desc at coordinates (for interval)? (as ref)? (with transition ref)?
-interval: number (milliseconds|ms)|(seconds|s)|(minutes|m)
-number: [0-9]*(\.[0-9]+)?
-coordinates: coordinate, coordinate (, coordinates)?
-ref: @\W+
+method: module.method_call
+module: (NLP|Tab|Std|Conv|Enc|Read|AI|List|Enum|Stat|QR|Exp|Encr|Web|Color|Stream)
+method_call: [^()]+(named_arguments)
+named_arguments: named_argument | named_argument, named_arguments
+named_argument: [^=]+="[^"]+"
 comment: #.*
 empty_line: [^\n]*\n
 
 Examples:
-define transition as @transition0: 5s slide_left
-0: show image "my_image.png" at 100,200 for 5s as @character0 with transition @transition0
-2: show text "Hello World" at 20,20 for 2s
-show image "my_second_image.png" at 200,300 for 2s after @character0	# this statement has no time marker, but will appear after the transition of @character0
+Stream.Load(file="my_file.txt")
+Stream.Load(raw="This is a long text ...")
+Stream.select(from="10",to="50")
+List.convert(output="csv",sep=";",list_sep="auto")
+Std.Truncate(after_chars="100",suffix="...")

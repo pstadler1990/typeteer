@@ -1,7 +1,7 @@
 import argparse
 from sys import argv
 from pyppeteer.exceptions import InvalidOrNoInputStream
-from pyppeteer.generator import VideoGenerator
+from pyppeteer.generator import FilterLayerGenerator
 from pyppeteer.parser import Parser
 
 if __name__ == '__main__':
@@ -18,7 +18,7 @@ if __name__ == '__main__':
             input_stream = file.read()
 
             statements = parser.parse(input_stream)
-            generator = VideoGenerator()
+            generator = FilterLayerGenerator()
 
             try:
                 for statement in statements:

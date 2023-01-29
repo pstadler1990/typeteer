@@ -8,41 +8,34 @@ from pyppeteer.exceptions import ScanWrongTokenException
 class TokenType(enum.Enum):
     NUMBER = 1
     STRING = 2
-    REFERENCE = 3
+    STRING_IDENTIFIER = 3
 
     CHAR_COLON = 20
     CHAR_COMMA = 21
     CHAR_AT = 22
     CHAR_HASH = 23
+    L_PAREN = 24
+    R_PAREN = 25
+    CHAR_EQUALS = 26
 
-    TRANSITION_DEFINE = 30
-    TRANSITION_TRANSITION = 31
-    TRANSITION_SLIDE_LEFT = 32
-    TRANSITION_SLIDE_RIGHT = 33
-    TRANSITION_SLIDE_TOP = 34
-    TRANSITION_SLIDE_BOTTOM = 35
-    TRANSITION_FADE_IN = 36
-    TRANSITION_FADE_OUT = 37
-    TRANSITION_WITH = 38
-    TRANSITION_DURATION = 39
+    MODULE_DOT = 29
+    MODULE_NLP = 30
+    MODULE_TAB = 31
+    MODULE_STD = 32
+    MODULE_CONV = 33
+    MODULE_ENC = 34
+    MODULE_READ = 35
+    MODULE_AI = 36
+    MODULE_LIST = 37
+    MODULE_ENUM = 38
+    MODULE_STAT = 39
+    MODULE_QR = 40
+    MODULE_EXP = 41
+    MODULE_ENCR = 42
+    MODULE_WEB = 43
+    MODULE_COLOR = 44
+    MODULE_STREAM = 45
 
-    REFERENCE_AS = 40
-
-    SHOW = 60
-    SHOW_IMAGE = 61
-    SHOW_TEXT = 62
-    SHOW_CIRCLE = 63
-    SHOW_RECT = 64
-    SHOW_ELLIPSOID = 65
-    SHOW_LINE = 66
-    SHOW_HIDE = 67
-
-    PLAY = 60
-    PLAY_SOUND = 61
-
-    AT = 80
-    FOR = 81
-    AFTER = 82
     UNIT = 83
 
     EOF = 999
@@ -112,10 +105,17 @@ class Scanner:
                 self._advance(peek)
                 return Token(TokenType.CHAR_COLON, cn=self._char_offset)
 
-            if self._cur_char == '@':
-                # Reference
+            if self._cur_char == '(':
                 self._advance(peek)
-                return self._scan_identifier()
+                return Token(TokenType.L_PAREN, cn=self._char_offset)
+
+            if self._cur_char == ')':
+                self._advance(peek)
+                return Token(TokenType.R_PAREN, cn=self._char_offset)
+
+            if self._cur_char == '=':
+                self._advance(peek)
+                return Token(TokenType.CHAR_EQUALS, cn=self._char_offset)
 
             if self._cur_char == ',':
                 # List of coordinates
@@ -123,7 +123,10 @@ class Scanner:
                 return Token(TokenType.CHAR_COMMA, cn=self._char_offset)
 
             if self._cur_char.isdigit() or self._cur_char == '.':
-                tmp_value = self._scan_number_or_duration()
+                if self._cur_char == '.' and not self._peek().isdigit():
+                    self._advance()
+                    return Token(TokenType.MODULE_DOT, cn=self._char_offset, value='')
+                tmp_value = self._scan_number_or_duration(self._cur_char)
                 if type(tmp_value) == float:
                     return Token(TokenType.NUMBER, cn=self._char_offset, value=tmp_value)
                 else:
@@ -161,7 +164,7 @@ class Scanner:
         while self._cur_char is not None and self._cur_char.isspace():
             self._advance()
 
-    def _scan_number_or_duration(self) -> [float | Unit]:
+    def _scan_number_or_duration(self, first_char='') -> [float | Unit]:
         tmp_num = ''
         off = 0
         scan_float = False
@@ -177,14 +180,6 @@ class Scanner:
                     self._advance()
                     scan_hex = True
                     scan_float = False
-
-            if off > 0 and self._cur_char in ['s', 'm']:
-                if scan_unit:
-                    if unit != 'm':
-                        raise ScanWrongTokenException('Invalid token for duration')
-                unit += self._cur_char
-                self._advance()
-                scan_unit = True
 
             if self._cur_char == '.':
                 # Leading dot without digit (.3)
@@ -226,13 +221,13 @@ class Scanner:
         else:
             raise ScanWrongTokenException()
 
-    def _scan_identifier(self) -> Token:
-        tmp_str = ''
-        while self._cur_char is not None and (
-                self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char == '_'):
-            tmp_str += self._cur_char
-            self._advance()
-        return Token(TokenType.REFERENCE, cn=self._char_offset, value=tmp_str)
+    # def _scan_identifier(self) -> Token:
+    #     tmp_str = ''
+    #     while self._cur_char is not None and (
+    #             self._cur_char.isalpha() or self._cur_char.isdigit() or self._cur_char == '_'):
+    #         tmp_str += self._cur_char
+    #         self._advance()
+    #     return Token(TokenType.STRING_IDENTIFIER, cn=self._char_offset, value=tmp_str)
 
     def _scan_keyword(self) -> Token:
         off = 0
@@ -247,49 +242,44 @@ class Scanner:
 
         slen = len(tmp_str)
         if slen == 2:
-            if tmp_str == 'at':
-                return Token(TokenType.AT, cn=self._char_offset)
-            elif tmp_str == 'as':
-                return Token(TokenType.REFERENCE_AS, cn=self._char_offset)
+            if tmp_str == 'AI':
+                return Token(TokenType.MODULE_AI, cn=self._char_offset)
+            elif tmp_str == 'QR':
+                return Token(TokenType.MODULE_QR, cn=self._char_offset)
         elif slen == 3:
-            if tmp_str == 'for':
-                return Token(TokenType.FOR, cn=self._char_offset)
+            if tmp_str == 'NLP':
+                return Token(TokenType.MODULE_NLP, cn=self._char_offset)
+            elif tmp_str == 'Tab':
+                return Token(TokenType.MODULE_TAB, cn=self._char_offset)
+            elif tmp_str == 'Std':
+                return Token(TokenType.MODULE_STD, cn=self._char_offset)
+            elif tmp_str == 'Enc':
+                return Token(TokenType.MODULE_ENC, cn=self._char_offset)
+            elif tmp_str == 'Exp':
+                return Token(TokenType.MODULE_EXP, cn=self._char_offset)
+            elif tmp_str == 'Web':
+                return Token(TokenType.MODULE_WEB, cn=self._char_offset)
         elif slen == 4:
-            if tmp_str == 'show':
-                return Token(TokenType.SHOW, cn=self._char_offset)
-            elif tmp_str == 'text':
-                return Token(TokenType.SHOW_TEXT, cn=self._char_offset)
-            elif tmp_str == 'rect':
-                return Token(TokenType.SHOW_RECT, cn=self._char_offset)
-            elif tmp_str == 'line':
-                return Token(TokenType.SHOW_LINE, cn=self._char_offset)
-            elif tmp_str == 'hide':
-                return Token(TokenType.SHOW_HIDE, cn=self._char_offset)
-            elif tmp_str == 'with':
-                return Token(TokenType.TRANSITION_WITH, cn=self._char_offset)
-            elif tmp_str == 'play':
-                return Token(TokenType.PLAY, cn=self._char_offset)
+            if tmp_str == 'Conv':
+                return Token(TokenType.MODULE_CONV, cn=self._char_offset)
+            elif tmp_str == 'Read':
+                return Token(TokenType.MODULE_READ, cn=self._char_offset)
+            elif tmp_str == 'List':
+                return Token(TokenType.MODULE_LIST, cn=self._char_offset)
+            elif tmp_str == 'Enum':
+                return Token(TokenType.MODULE_ENUM, cn=self._char_offset)
+            elif tmp_str == 'Stat':
+                return Token(TokenType.MODULE_STAT, cn=self._char_offset)
+            elif tmp_str == 'Encr':
+                return Token(TokenType.MODULE_ENCR, cn=self._char_offset)
         elif slen == 5:
-            if tmp_str == 'after':
-                return Token(TokenType.AFTER, cn=self._char_offset)
-            elif tmp_str == 'sound':
-                return Token(TokenType.PLAY_SOUND, cn=self._char_offset)
-            elif tmp_str == 'image':
-                return Token(TokenType.SHOW_IMAGE, cn=self._char_offset)
+            if tmp_str == 'Color':
+                return Token(TokenType.MODULE_COLOR, cn=self._char_offset)
         elif slen == 6:
-            if tmp_str == 'circle':
-                return Token(TokenType.SHOW_CIRCLE, cn=self._char_offset)
-        elif slen == 8:
-            if tmp_str == 'duration':
-                return Token(TokenType.TRANSITION_DURATION, cn=self._char_offset)
-        elif slen == 9:
-            if tmp_str == 'ellipsoid':
-                return Token(TokenType.SHOW_ELLIPSOID, cn=self._char_offset)
-        elif slen == 10:
-            if tmp_str == 'transition':
-                return Token(TokenType.TRANSITION_DEFINE, cn=self._char_offset)
+            if tmp_str == 'Stream':
+                return Token(TokenType.MODULE_STREAM, cn=self._char_offset)
 
-        raise ScanWrongTokenException('Unknown token ' + tmp_str)
+        return Token(TokenType.STRING_IDENTIFIER, cn=self._char_offset, value=tmp_str)
 
     @property
     def char_offset(self):

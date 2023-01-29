@@ -20,3 +20,7 @@ class GenerateSymbolAlreadyExists(Exception):
 
 class GenerateSymbolNotFound(Exception):
     pass
+
+
+class GenerateSymbolMethodNotFound(Exception):
+    pass
